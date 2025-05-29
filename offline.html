@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Offline</title>
+    <title>Offline - Snake Game</title>
     <style>
         body {
             background-image: linear-gradient(100deg, #575656, #062e3f);
@@ -14,53 +14,67 @@
             align-items: center;
             justify-content: flex-start;
             font-family: 'Segoe UI', Arial, sans-serif;
+            color: white;
         }
         
         h1 {
-            margin-top: 60px;
-            color: white;
+            margin-top: 40px;
             font-size: 2.2em;
             letter-spacing: 1px;
         }
         
         h3 {
+            margin-top: 0;
             color: #fff;
         }
         
-        p {
-            color: #333;
-            font-size: 1.1em;
-            font-weight: bold;
-        }
-        
-        #game-area {
+        #game-container {
             background: rgba(255, 255, 255, 0.95);
             box-shadow: 0 8px 24px rgba(60, 60, 60, 0.12);
             border-radius: 18px;
-            padding: 32px 28px 24px 28px;
-            margin-top: 30px;
-            display: inline-block;
-            min-width: 320px;
+            padding: 20px;
+            margin-top: 20px;
         }
         
-        #game-area p {
-            margin: 12px 0;
-        }
-        
-        input[type="number"] {
-            width: 60px;
-            padding: 8px;
-            border: 1.5px solid #43c6ac;
-            border-radius: 8px;
-            font-size: 1.1em;
-            margin-right: 10px;
-            outline: none;
-            transition: border 0.2s;
-        }
-        
-        input[type="number"]:focus {
-            border: 1.5px solid #2e8b7a;
+        #game-board {
+            width: 300px;
+            height: 300px;
+            border: 2px solid #43c6ac;
             background: #f0fdfa;
+            position: relative;
+        }
+        
+        .snake-part {
+            width: 10px;
+            height: 10px;
+            background: #43c6ac;
+            position: absolute;
+            border-radius: 2px;
+        }
+        
+        .snake-head {
+            background: #2e8b7a;
+        }
+        
+        .food {
+            width: 10px;
+            height: 10px;
+            background: #ff6b6b;
+            position: absolute;
+            border-radius: 50%;
+        }
+        
+        #score {
+            color: #333;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 15px 0;
+            text-align: center;
+        }
+        
+        #controls {
+            margin-top: 15px;
+            text-align: center;
         }
         
         button {
@@ -71,7 +85,7 @@
             padding: 8px 22px;
             font-size: 1em;
             cursor: pointer;
-            margin: 8px 4px 0 0;
+            margin: 8px 4px;
             box-shadow: 0 2px 8px rgba(67, 198, 172, 0.08);
             transition: background 0.2s, transform 0.1s;
         }
@@ -81,49 +95,197 @@
             transform: translateY(-2px) scale(1.04);
         }
         
-        #result {
-            font-weight: bold;
-            font-size: 1.15em;
-            margin-top: 16px;
-            min-height: 24px;
+        #game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
         }
     </style>
 </head>
 
 <body>
     <h1>Kamu sedang offline!</h1>
-    <h3>Coba main game ini dulu:</h3>
-    <div id="game-area">
-        <p>Tebak angka antara 1 sampai 10!</p>
-        <input type="number" id="guess" min="1" max="10" />
-        <button onclick="checkGuess()">Tebak!</button>
-        <p id="result"></p>
-        <button onclick="resetGame()">Main Lagi</button>
+    <h3>Main game Snake dulu yuk!</h3>
+    
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <div id="game-board">
+            <div id="game-over">
+                Game Over!<br>
+                Score: <span id="final-score">0</span><br>
+                <button onclick="resetGame()">Main Lagi</button>
+            </div>
+        </div>
+        <div id="controls">
+            <button onclick="startGame()">Mulai Game</button>
+            <button onclick="resetGame()">Reset</button>
+        </div>
     </div>
-    <script>
-        let randomNumber = Math.floor(Math.random() * 10) + 1;
-        let attempts = 0;
 
-        function checkGuess() {
-            const guess = parseInt(document.getElementById('guess').value);
-            attempts++;
-            if (guess === randomNumber) {
-                document.getElementById('result').textContent = `Benar! Kamu menebak dalam ${attempts} percobaan.`;
-            } else if (guess < randomNumber) {
-                document.getElementById('result').textContent = 'Terlalu kecil!';
-            } else if (guess > randomNumber) {
-                document.getElementById('result').textContent = 'Terlalu besar!';
+    <script>
+        const board = document.getElementById('game-board');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('game-over');
+        const finalScoreElement = document.getElementById('final-score');
+        
+        let snake = [];
+        let food = {};
+        let direction = 'right';
+        let nextDirection = 'right';
+        let gameInterval;
+        let score = 0;
+        let gameSpeed = 150;
+        let isGameRunning = false;
+
+        function createSnakePart(x, y, isHead = false) {
+            const part = document.createElement('div');
+            part.className = isHead ? 'snake-part snake-head' : 'snake-part';
+            part.style.left = x + 'px';
+            part.style.top = y + 'px';
+            board.appendChild(part);
+            return part;
+        }
+
+        function createFood() {
+            const foodElement = document.createElement('div');
+            foodElement.className = 'food';
+            
+            // Generate random position
+            const maxX = (board.clientWidth - 10) / 10;
+            const maxY = (board.clientHeight - 10) / 10;
+            const x = Math.floor(Math.random() * maxX) * 10;
+            const y = Math.floor(Math.random() * maxY) * 10;
+            
+            foodElement.style.left = x + 'px';
+            foodElement.style.top = y + 'px';
+            board.appendChild(foodElement);
+            
+            food = { element: foodElement, x, y };
+        }
+
+        function moveSnake() {
+            direction = nextDirection;
+            const head = snake[0];
+            let newX = parseInt(head.style.left);
+            let newY = parseInt(head.style.top);
+
+            // Calculate new position
+            switch(direction) {
+                case 'up': newY -= 10; break;
+                case 'down': newY += 10; break;
+                case 'left': newX -= 10; break;
+                case 'right': newX += 10; break;
+            }
+
+            // Check collision with walls
+            if (newX < 0 || newX >= board.clientWidth || 
+                newY < 0 || newY >= board.clientHeight) {
+                gameOver();
+                return;
+            }
+
+            // Check collision with self
+            for (let i = 0; i < snake.length; i++) {
+                if (parseInt(snake[i].style.left) === newX && 
+                    parseInt(snake[i].style.top) === newY) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            // Check if food is eaten
+            if (newX === food.x && newY === food.y) {
+                score += 10;
+                scoreElement.textContent = 'Score: ' + score;
+                food.element.remove();
+                createFood();
+                // Increase speed every 50 points
+                if (score % 50 === 0) {
+                    gameSpeed = Math.max(50, gameSpeed - 10);
+                    clearInterval(gameInterval);
+                    gameInterval = setInterval(moveSnake, gameSpeed);
+                }
             } else {
-                document.getElementById('result').textContent = 'Masukkan angka yang valid!';
+                // Remove tail if no food eaten
+                const tail = snake.pop();
+                tail.remove();
+            }
+
+            // Add new head
+            const newHead = createSnakePart(newX, newY, true);
+            snake.unshift(newHead);
+        }
+
+        function startGame() {
+            if (!isGameRunning) {
+                resetGame();
+                isGameRunning = true;
+                gameInterval = setInterval(moveSnake, gameSpeed);
             }
         }
 
         function resetGame() {
-            randomNumber = Math.floor(Math.random() * 10) + 1;
-            attempts = 0;
-            document.getElementById('guess').value = '';
-            document.getElementById('result').textContent = '';
+            // Clear existing game
+            clearInterval(gameInterval);
+            board.innerHTML = '';
+            snake.forEach(part => part.remove());
+            if (food.element) food.element.remove();
+            
+            // Reset variables
+            snake = [];
+            direction = 'right';
+            nextDirection = 'right';
+            score = 0;
+            gameSpeed = 150;
+            isGameRunning = false;
+            scoreElement.textContent = 'Score: 0';
+            gameOverElement.style.display = 'none';
+            
+            // Create initial snake
+            snake.push(createSnakePart(150, 150, true));
+            snake.push(createSnakePart(140, 150));
+            snake.push(createSnakePart(130, 150));
+            
+            // Create initial food
+            createFood();
         }
+
+        function gameOver() {
+            clearInterval(gameInterval);
+            isGameRunning = false;
+            finalScoreElement.textContent = score;
+            gameOverElement.style.display = 'block';
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (!isGameRunning) return;
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                    if (direction !== 'down') nextDirection = 'up';
+                    break;
+                case 'ArrowDown':
+                    if (direction !== 'up') nextDirection = 'down';
+                    break;
+                case 'ArrowLeft':
+                    if (direction !== 'right') nextDirection = 'left';
+                    break;
+                case 'ArrowRight':
+                    if (direction !== 'left') nextDirection = 'right';
+                    break;
+            }
+        });
+
+        // Initialize game
+        resetGame();
     </script>
 </body>
 

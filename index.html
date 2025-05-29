@@ -60,11 +60,61 @@
         </script>
 
         <script>
+        // Check if service worker is supported
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('serviceWorker.js');
-            });
+            console.log('Service Worker supported');
+
+            // Function to register service worker
+            async function registerServiceWorker() {
+                try {
+                    const registration = await navigator.serviceWorker.register('./service-worker.js', {
+                        scope: './',
+                        updateViaCache: 'none'
+                    });
+
+                    console.log('Service Worker registered successfully:', registration.scope);
+
+                    // Check if there's an update available
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        console.log('Service Worker update found!');
+
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('New Service Worker installed. Refresh to activate.');
+                            }
+                        });
+                    });
+
+                    // Handle controller change
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        console.log('New Service Worker activated!');
+                    });
+
+                } catch (error) {
+                    console.error('Service Worker registration failed:', error);
+                }
             }
+
+            // Register service worker when page is fully loaded
+            window.addEventListener('load', () => {
+                console.log('Page loaded, registering Service Worker...');
+                registerServiceWorker();
+            });
+
+            // Handle service worker messages
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                console.log('Message from Service Worker:', event.data);
+            });
+
+            // Handle service worker errors
+            navigator.serviceWorker.addEventListener('error', (error) => {
+                console.error('Service Worker error:', error);
+            });
+
+        } else {
+            console.log('Service Worker not supported in this browser');
+        }
         </script>
 </body>
 
